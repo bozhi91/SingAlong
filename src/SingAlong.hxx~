@@ -1,0 +1,192 @@
+
+/*
+ * Copyright (c) 2016-2017  Bozhi & Eloi
+ * 
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ * 
+ */
+ 
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <vector>
+#include <sstream>
+#include <stdexcept>
+
+#include "Artist.hxx"
+
+using namespace std;
+
+class SingAlong {
+
+	public:
+		//Default Constructor
+		SingAlong(){
+			_catalogName = "Untitled Catalog";		
+		}
+			
+		//Destructor
+		~SingAlong(){
+			for(std::vector< Artist* >::iterator it=_artists.begin();it!=_artists.end(); ++it)
+				delete *it;
+		}
+
+		void includeTrackOnAlbum(std::string artistName, std::string trackName, std::string albumName){
+			
+			Artist & artist = findArtist(artistName);
+			Album  & album  = artist.findAlbum(albumName);
+			Track  & track  = artist.findTrack(trackName);
+
+			album.addTrack(track);
+		}
+
+		void createArtist(std::string artistName, bool group){
+			Artist* artist = new Artist(artistName, group);					
+			_artists.push_back(artist);
+		}
+
+		void createNewAlbum(std::string artistName, std::string albumName){
+			Artist & artist = findArtist(artistName);
+			artist.newAlbum(albumName);
+		}
+
+		void createNewTrack(std::string artistName, std::string trackName, std::string master){	
+			Artist & artist = findArtist(artistName);
+			unsigned int duration;
+			std::string masterName;
+			std::stringstream stream;
+
+			stream<<"masters/"<<master;
+			masterName = stream.str();
+
+			duration = readMaster(masterName);
+			artist.newTrack(trackName,duration,master);			
+		}
+
+		Artist & findArtist(std::string artistName){
+			unsigned int i;
+		    for(i=0;i<_artists.size();i++){
+				if(_artists.at(i)->name() == artistName){
+					return *_artists.at(i); 
+				}
+			}
+		    throw ArtistNotFound();
+		}
+
+		//Reads the contain of the master file and returns the track duration
+		//This function is called by the method createNewTrack()
+		unsigned int readMaster(std::string masterName){
+		    ifstream myfile (masterName.c_str());
+  			std::string buffer;
+  			unsigned int duration;
+
+			if(!myfile)
+				throw MasterNotFound();
+
+	  		//Read the master file
+	  		getline(myfile,buffer);				
+	    	myfile.close();
+
+	    	//Convert the string to unsigned int
+			stringstream convert(buffer);//object from the class stringstream
+			convert>>duration; 
+  			return duration;
+		}
+
+
+		void listAlbum(std::string artistName,std::string albumName){
+			Artist & artist = findArtist(artistName);
+			Album  & album  = artist.findAlbum(albumName);
+			album.list();
+		}
+
+		void unlistAlbum(std::string artistName,std::string albumName){
+			Artist & artist = findArtist(artistName);
+			Album  & album  = artist.findAlbum(albumName);
+			album.unlist();
+		}
+		//Returns a list (as String) of all artists in the array:> "A solo artist [solo]\n"
+		std::string catalog(void){
+			unsigned int i,j,k,l,trackSize,albumSize;
+			std::string artist,solo,listed,master;
+			std::stringstream stream,mas;
+
+			Track *track;
+			Album *album;
+
+			//This method returns something like:A solo artist [solo]\n
+			for(i=0; i<_artists.size(); i++){
+				//===== Get the artist data
+					_artists.at(i)->isSolo()==true ? solo+="[group]" : solo+="[solo]";
+					stream << _artists.at(i)->name() << " " << solo << "\n";
+					albumSize = _artists.at(i)->getAlbums().size();
+
+					for(k=0; k<albumSize; k++){
+					//===== Get album data =====
+						album = _artists.at(i)->getAlbums().at(k);	
+						album->isListed()==true ? listed+="" : listed+=" [unlisted]";
+						
+						if(album->getTracks().size()==0){	
+							stream << "Album: " << album->title()<<listed<<"\n";
+							listed = "";	
+							for(l=0; l<album->getTracks().size(); l++){
+								stream << album->getTracks().at(l)->title() << "++++";
+							}
+						}
+					}
+
+				//===== Get track data =====
+					trackSize = _artists.at(i)->getTracks().size();
+					for(j=0; j<trackSize; j++){
+						track = _artists.at(i)->getTracks().at(j);
+						stream << "\t"<<track->title() << " [";
+						stream << track->duration() << "s]\n\t\t";
+						stream << "masters/" << _artists.at(i)->getTracks().at(j)->master() << "\n";
+					}
+				////////////////////////////////////////////////////////////////////////////////
+				listed = "";
+				for(k=0; k<albumSize; k++){
+				//===== Get album data =====
+					album = _artists.at(i)->getAlbums().at(k);	
+					album->isListed()==true ? listed+="" : listed+=" [unlisted]";
+					if(album->getTracks().size()!=0){	
+						stream << "Album: " << album->title()<<listed<<"\n";
+						listed = "";
+						
+						for(l=0; l<album->getTracks().size(); l++){
+							stream << l+1<< " - " << album->getTracks().at(l)->title() << " [30s]\n";
+							
+							mas << "masters/aMasterFile.wav";
+							//readMaster(mas.str());
+						}
+					}
+				}
+
+
+				solo   = "";
+			}
+			artist = stream.str();	
+			return artist;
+		}
+
+	private:
+		//The catalog has an array of artists
+		std::vector<Artist*>_artists;
+		std::string _catalogName;
+
+	//Our exception class
+	class ArtistNotFound : public std::exception{
+		const char * what() const throw (){
+			return "The artist does not exist";
+		}
+	};	
+
+	class MasterNotFound : public std::exception{
+		const char * what() const throw (){
+			return "The master file does not exist";
+		}
+	};	
+};
